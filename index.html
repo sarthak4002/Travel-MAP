@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Travel Map</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+
+    <style>
+        /* Futuristic Styling */
+        html, body {
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            background-color: #1c1e22;
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        #map {
+            height: calc(100% - 260px); /* Adjust height for search bar and filters */
+        }
+
+        /* Card Styling for Search and Filter */
+        .card {
+            background-color: #2a2d34;
+            border: 1px solid #3c4048;
+            border-radius: 12px;
+            padding: 16px;
+            color: #ffffff;
+        }
+
+        h3 {
+            color: #76e4f7;
+        }
+
+        input, select {
+            background-color: #3c4048;
+            color: #ffffff;
+            border: none;
+            padding: 8px;
+            margin-bottom: 12px;
+            border-radius: 6px;
+            transition: background-color 0.3s ease-in-out;
+        }
+
+        input:focus, select:focus {
+            background-color: #52555c;
+            outline: none;
+        }
+
+        button {
+            background-color: #76e4f7;
+            color: #1c1e22;
+            border: none;
+            border-radius: 6px;
+            padding: 10px;
+            cursor: pointer;
+            transition: transform 0.3s ease, background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #55b7c9;
+            transform: scale(1.05);
+        }
+
+        /* Close Button Styling */
+        #closeReview {
+            font-size: 1.8rem;
+            font-weight: bold;
+            cursor: pointer;
+            color: #f87171;
+        }
+
+        /* Review Form Styling */
+        #reviewForm {
+            background-color: #2a2d34;
+            border-radius: 12px;
+            color: #ffffff;
+            border: 1px solid #3c4048;
+            padding: 16px;
+        }
+
+        /* Loading Spinner */
+        #loading {
+            display: none;
+            background-color: #2a2d34;
+            color: #ffffff;
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        /* Map & Media Queries for Mobile Devices */
+        @media (max-width: 640px) {
+            #map {
+                height: calc(100% - 300px);
+            }
+        }
+
+        /* General Form and Input Styling */
+        textarea, select, input {
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Firebase Initialization -->
+    <script type="module">
+      // Import the functions you need from the SDKs you need
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js";
+      import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-analytics.js";
+      // TODO: Add SDKs for Firebase products that you want to use
+      // https://firebase.google.com/docs/web/setup#available-libraries
+
+      // Your web app's Firebase configuration
+      const firebaseConfig = {
+        apiKey: "AIzaSyDJmG53_2RNdDGLJ8BEnCmq8XWbyL5fkig",
+        authDomain: "travelmap-a44c3.firebaseapp.com",
+        projectId: "travelmap-a44c3",
+        storageBucket: "travelmap-a44c3.appspot.com",
+        messagingSenderId: "637354800415",
+        appId: "1:637354800415:web:7ff8e0d0e1e0bdc574ec2a",
+        measurementId: "G-0801JKWGKF"
+      };
+
+      // Initialize Firebase
+      const app = initializeApp(firebaseConfig);
+      const analytics = getAnalytics(app);
+    </script>
+
+    <!-- Page Wrapper -->
+    <div class="container mx-auto p-4 h-full flex flex-col">
+        <!-- Search Bar and Filter Section -->
+        <div class="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <!-- Search for Place -->
+            <div class="card">
+                <h3 class="font-bold mb-2">Search for a Place:</h3>
+                <input type="text" id="locationInput" placeholder="Enter a city or place name">
+                <button id="searchButton">Search Location</button>
+            </div>
+
+            <!-- Filter Section -->
+            <div class="card">
+                <h3 class="font-bold mb-2">Filter by Place Type:</h3>
+                <select id="placeType">
+                    <option value="">Select a category</option>
+                    <option value="tourist">Tourist Spots</option>
+                    <option value="cafe">Cafes</option>
+                    <option value="hospital">Hospitals</option>
+                    <option value="clinic">Clinics</option>
+                    <option value="restaurant">Restaurants</option>
+                    <option value="park">Parks</option>
+                    <option value="school">Schools</option>
+                    <option value="pharmacy">Pharmacies</option>
+                    <option value="atm">ATMs</option>
+                    <option value="bus_station">Bus Stations</option>
+                </select>
+                <button id="filterButton" class="mt-4">Apply Filter</button>
+            </div>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="loading" class="card">Loading nearby places...</div>
+
+        <!-- Map Container -->
+        <div id="map" class="rounded-lg shadow-md"></div>
+
+        <!-- Review Form -->
+        <div id="reviewForm" class="hidden mt-6 relative">
+            <button id="closeReview">&times;</button>
+            <h4 class="font-bold text-xl">Leave a Review:</h4>
+            <textarea id="reviewText" rows="3" placeholder="Write your review..." class="mt-3"></textarea>
+            <label for="rating" class="block mt-3 font-semibold">Rating:</label>
+            <select id="rating">
+                <option value="1">1 Star</option>
+                <option value="2">2 Stars</option>
+                <option value="3">3 Stars</option>
+                <option value="4">4 Stars</option>
+                <option value="5">5 Stars</option>
+            </select>
+            <button id="submitReview" class="mt-4">Submit Review</button>
+            <div id="reviewsList" class="mt-4"></div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script>
+        var map = L.map('map', {
+            center: [51.505, -0.09],
+            zoom: 13,
+            maxZoom: 19,
+            zoomAnimation: true,
+            fadeAnimation: true
+        });
+
+        var tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            tileSize: 256,
+            maxZoom: 18
+        }).addTo(map);
+
+        let fetchedPlaces = [];
+        let isFetching = false;
+        let markerGroup = L.layerGroup().addTo(map);  // Layer group to manage markers
+
+        function debounce(func, delay) {
+            let timeoutId;
+            return function (...args) {
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                }
+                timeoutId = setTimeout(() => {
+                    func.apply(null, args);
+                }, delay);
+            };
+        }
+
+        function geocodeLocation(location) {
+            const geocodeUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}`;
+
+            fetch(geocodeUrl)
+                .then(response => response.json())
+                .then(data => {
+                    if (data && data.length > 0) {
+                        const lat = data[0].lat;
+                        const lon = data[0].lon;
+                        map.setView([lat, lon], 13);
+                        getNearbyPlaces(lat, lon, document.getElementById("placeType").value);
+                    } else {
+                        alert('Location not found. Please try a different query.');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching geocode data:', error);
+                    alert('Error fetching location data. Please try again.');
+                });
+        }
+
+        function getNearbyPlaces(lat, lon, placeType) {
+            if (isFetching) return;
+
+            isFetching = true;
+            document.getElementById("loading").style.display = "block";
+            markerGroup.clearLayers(); // Clear previous markers
+
+            const apiKey = 'YOUR_PLACES_API_KEY'; // Replace with your actual Places API Key
+            const apiUrl = `https://api.yourplacesapi.com/nearby?lat=${lat}&lon=${lon}&type=${placeType}&key=${apiKey}`;
+
+            fetch(apiUrl)
+                .then(response => response.json())
+                .then(data => {
+                    fetchedPlaces = data.results || [];
+                    fetchedPlaces.forEach(place => {
+                        const marker = L.marker([place.geometry.location.lat, place.geometry.location.lng]).addTo(markerGroup);
+                        marker.bindPopup(place.name);
+                    });
+                    document.getElementById("loading").style.display = "none";
+                    isFetching = false;
+                })
+                .catch(error => {
+                    console.error('Error fetching places:', error);
+                    document.getElementById("loading").style.display = "none";
+                    isFetching = false;
+                });
+        }
+
+        document.getElementById("searchButton").addEventListener("click", () => {
+            const location = document.getElementById("locationInput").value;
+            if (location) {
+                geocodeLocation(location);
+            } else {
+                alert("Please enter a location.");
+            }
+        });
+
+        document.getElementById("filterButton").addEventListener("click", () => {
+            const placeType = document.getElementById("placeType").value;
+            const lat = map.getCenter().lat;
+            const lon = map.getCenter().lng;
+            getNearbyPlaces(lat, lon, placeType);
+        });
+
+        // Handle Review Form
+        document.getElementById("submitReview").addEventListener("click", () => {
+            const reviewText = document.getElementById("reviewText").value;
+            const rating = document.getElementById("rating").value;
+            if (reviewText) {
+                saveReview(reviewText, rating);
+            } else {
+                alert("Please write a review before submitting.");
+            }
+        });
+
+        document.getElementById("closeReview").addEventListener("click", () => {
+            document.getElementById("reviewForm").classList.add("hidden");
+        });
+
+        function saveReview(reviewText, rating) {
+            // Logic to save the review to Firebase
+            console.log("Saving review:", reviewText, "Rating:", rating);
+            // Here you can add Firebase code to save the review
+            // e.g., firebase.firestore().collection("reviews").add({ text: reviewText, rating: rating })
+        }
+
+        // Optionally, you can implement a function to fetch and display saved reviews
+        function fetchReviews() {
+            // Logic to fetch reviews from Firebase
+            // e.g., firebase.firestore().collection("reviews").get().then(snapshot => { ... });
+        }
+
+        // Fetch reviews on load
+        fetchReviews();
+
+        // Optional: Show review form when a marker is clicked
+        markerGroup.on('click', function(e) {
+            document.getElementById("reviewForm").classList.remove("hidden");
+        });
+    </script>
+</body>
+</html>
